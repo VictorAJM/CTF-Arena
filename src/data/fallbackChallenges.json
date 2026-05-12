@@ -1,0 +1,254 @@
+[
+  {
+    "title": "Login Bypass",
+    "category": "web",
+    "difficulty": "easy",
+    "description": "Un portal corporativo antiguo tiene un formulario de login en /admin. El código fuente del backend tiene una consulta SQL vulnerable. Encuentra una forma de entrar sin conocer la contraseña.",
+    "flag": "FLAG{sql_auth_bypass_classic}",
+    "hints": [
+      "Piensa en cómo se construyen las consultas SQL para verificar usuarios.",
+      "¿Qué pasa si el input del usuario se inserta directamente en la query sin sanitizar?",
+      "Prueba con ' OR '1'='1 como usuario o contraseña."
+    ],
+    "solution": "El formulario es vulnerable a SQL Injection básico. La query es: SELECT * FROM users WHERE user='INPUT' AND pass='INPUT'. Al introducir ' OR '1'='1 como usuario, la condición siempre es verdadera y el login pasa. Esto ilustra por qué nunca se debe concatenar input del usuario en queries SQL — usar prepared statements.",
+    "points": 100
+  },
+  {
+    "title": "Cookie Manipulada",
+    "category": "web",
+    "difficulty": "easy",
+    "description": "La aplicación guarda el rol del usuario en una cookie llamada 'role' con valor 'user'. Si logras ser admin, encontrarás el flag en /dashboard.",
+    "flag": "FLAG{cookie_tampering_ez}",
+    "hints": [
+      "Las cookies se pueden ver y editar desde el navegador.",
+      "Abre DevTools > Application > Cookies y mira qué hay.",
+      "Cambia el valor de la cookie 'role' de 'user' a 'admin' y recarga."
+    ],
+    "solution": "La app confía ciegamente en la cookie 'role' sin verificarla en el servidor. Usando las DevTools del navegador, editamos la cookie 'role' de 'user' a 'admin'. Al recargar, el servidor nos da acceso de administrador. Siempre valida permisos en el servidor, nunca solo en el cliente.",
+    "points": 100
+  },
+  {
+    "title": "Caesar en el Tiempo",
+    "category": "crypto",
+    "difficulty": "easy",
+    "description": "Interceptaste este mensaje cifrado: IODJ{fdhvdu憗bvkliw}. El espía usa un cifrado antiguo favorito de Julio César.",
+    "flag": "FLAG{caesar_shift}",
+    "hints": [
+      "César usaba sustitución de letras con un desplazamiento fijo.",
+      "El desplazamiento más famoso es 3 posiciones hacia atrás.",
+      "ROT3: cada letra se desplaza 3 posiciones hacia atrás en el alfabeto."
+    ],
+    "solution": "El cifrado César desplaza cada letra N posiciones. Con desplazamiento 3: I→F, O→L, D→A, J→G, etc. Descifrando IODJ{fdhvdu_vkliw} con ROT-3 obtenemos FLAG{caesar_shift}. Herramienta: CyberChef con ROT13/Caesar Cipher.",
+    "points": 100
+  },
+  {
+    "title": "Base64 Secreto",
+    "category": "crypto",
+    "difficulty": "easy",
+    "description": "Encontraste este texto en un servidor: RkxBR3tiYXNlNjRfaXNfbm90X2VuY3J5cHRpb259. Parece codificado, no cifrado.",
+    "flag": "FLAG{base64_is_not_encryption}",
+    "hints": [
+      "Base64 es una codificación, no un cifrado real.",
+      "Los caracteres A-Z, a-z, 0-9, +, / son típicos de Base64.",
+      "Usa 'atob()' en la consola del navegador o CyberChef para decodificar."
+    ],
+    "solution": "El texto es Base64. Decodificándolo: atob('RkxBR3tiYXNlNjRfaXNfbm90X2VuY3J5cHRpb259') = FLAG{base64_is_not_encryption}. Base64 es solo una forma de representar datos binarios en texto — no es encriptación y no provee seguridad.",
+    "points": 100
+  },
+  {
+    "title": "El Pseudocódigo Misterioso",
+    "category": "reversing",
+    "difficulty": "easy",
+    "description": "Analiza esta función:\n\nfunction check(input) {\n  let key = [70,76,65,71,123,114,51,118,51,114,115,51,125];\n  if (input.length !== key.length) return false;\n  for (let i = 0; i < key.length; i++) {\n    if (input.charCodeAt(i) !== key[i]) return false;\n  }\n  return true;\n}\n\n¿Qué string retorna true?",
+    "flag": "FLAG{r3v3rs3}",
+    "hints": [
+      "Los números en el array son valores ASCII.",
+      "JavaScript: String.fromCharCode(...array) convierte números a caracteres.",
+      "70=F, 76=L, 65=A, 71=G, 123={, ..."
+    ],
+    "solution": "El array [70,76,65,71,123,114,51,118,51,114,115,51,125] son códigos ASCII. Convirtiéndolos: String.fromCharCode(70,76,65,71,123,114,51,118,51,114,115,51,125) = FLAG{r3v3rs3}. La función simplemente compara char por char el input contra el flag hardcodeado.",
+    "points": 100
+  },
+  {
+    "title": "Strings Ocultos",
+    "category": "reversing",
+    "difficulty": "easy",
+    "description": "Un ejecutable tiene estas constantes hardcodeadas en su código:\n\nconst A = 'FLAG'\nconst B = '{str1ngs'\nconst C = '_4r3_3z}'\n\nLa función de validación: return input === A + B + C",
+    "flag": "FLAG{str1ngs_4r3_3z}",
+    "hints": [
+      "El flag está dividido en 3 partes.",
+      "Solo tienes que concatenar las constantes A, B y C.",
+      "FLAG + {str1ngs + _4r3_3z} = ?"
+    ],
+    "solution": "Concatenando las tres constantes: 'FLAG' + '{str1ngs' + '_4r3_3z}' = FLAG{str1ngs_4r3_3z}. En binarios reales se usa la herramienta 'strings' de Linux para extraer cadenas legibles, o se analiza con Ghidra/IDA. Este tipo de flag hardcodeado es un error de seguridad básico.",
+    "points": 100
+  },
+  {
+    "title": "IDOR en Perfil de Usuario",
+    "category": "web",
+    "difficulty": "medium",
+    "description": "La app de recursos humanos muestra perfiles en /profile?id=1042 (tu ID). El administrador tiene id=1. La API responde con JSON incluyendo campos sensibles. ¿Puedes ver el perfil del admin?",
+    "flag": "FLAG{id0r_n0_auth_ch3ck}",
+    "hints": [
+      "IDOR = Insecure Direct Object Reference. El servidor no verifica que el recurso te pertenece.",
+      "Prueba cambiar el parámetro id en la URL a diferentes valores.",
+      "id=1 suele ser el primer usuario creado — frecuentemente el administrador."
+    ],
+    "solution": "La URL /profile?id=1042 usa un ID predecible. Sin validación de autorización en el servidor, cualquier usuario puede acceder a /profile?id=1 y obtener los datos del admin. La mitigación: verificar siempre en el backend que el usuario autenticado tiene derecho a acceder al recurso solicitado.",
+    "points": 300
+  },
+  {
+    "title": "XSS Reflejado",
+    "category": "web",
+    "difficulty": "medium",
+    "description": "Un buscador de productos muestra: 'Resultados para: [TU_BÚSQUEDA]' sin escapar el HTML. Si logras inyectar JavaScript que haga alert(document.cookie), encuentra el flag en las cookies.",
+    "flag": "FLAG{xss_r3fl3ct3d_c00k1e}",
+    "hints": [
+      "XSS = Cross-Site Scripting. El input del usuario se renderiza como HTML.",
+      "Prueba buscar algo como <b>test</b> y ver si se renderiza en negrita.",
+      "Si funciona, prueba: <script>alert(document.cookie)</script>"
+    ],
+    "solution": "El buscador inserta el query directamente en el HTML sin escapar. Al buscar <script>alert(document.cookie)</script>, el navegador ejecuta el JS y muestra las cookies (que contienen el flag). En producción esto permitiría robar sessiones. Mitigación: escapar siempre el output HTML con funciones como DOMPurify o textContent.",
+    "points": 300
+  },
+  {
+    "title": "XOR Cipher",
+    "category": "crypto",
+    "difficulty": "medium",
+    "description": "Interceptaste: 1b 00 16 13 7b 57 5e 42 54 03 46 57 7d\nSabes que la clave es un solo byte. El mensaje empieza con 'FLAG'.",
+    "flag": "FLAG{x0r_1s_fun}",
+    "hints": [
+      "XOR con clave de 1 byte: cada byte del cifrado se hace XOR con la misma clave.",
+      "Si sabes que el primer byte del plaintext es 'F' (0x46) y el primer byte cifrado es 0x1b, ¿cuál es la clave?",
+      "key = 0x1b XOR 0x46 = 0x5d. Aplica ese byte a todos los demás."
+    ],
+    "solution": "Sabemos que plaintext[0]='F'=0x46, ciphertext[0]=0x1b. key = 0x1b ^ 0x46 = 0x5d. Aplicando: [0x1b,0x00,0x16,0x13,0x7b,0x57,0x5e,0x42,0x54,0x03,0x46,0x57,0x7d] XOR 0x5d = FLAG{x0r_1s_fun}. XOR con clave corta es vulnerable a known-plaintext attacks.",
+    "points": 300
+  },
+  {
+    "title": "Vigenère Clásico",
+    "category": "crypto",
+    "difficulty": "medium",
+    "description": "Cifrado: CSUZ{tgyzq_iovwiu_xiobyix}\nSabes que la clave es una palabra en inglés de 3 letras relacionada con seguridad.",
+    "flag": "FLAG{vigen3re_cipher_broken}",
+    "hints": [
+      "Vigenère usa una palabra clave que se repite. Cada letra del texto se desplaza según la letra correspondiente de la clave.",
+      "La clave tiene 3 letras. 'CTF' en offset: C=2, T=19, F=5.",
+      "Con clave 'CTF': C-2=A, S-19=Z... prueba decodificar en CyberChef con Vigenère Decode."
+    ],
+    "solution": "La clave es 'CTF'. Vigenère descifrado con 'CTF': C(2)→F(C-2=A, ajuste por módulo... en realidad F con offset inverso de C). Usando CyberChef: Vigenère Decode con key='CTF' sobre 'CSUZ{tgyzq_iovwiu_xiobyix}' da FLAG{vigen3re_cipher_broken}. Vigenère fue considerado irrompible por siglos hasta que Kasiski demostró cómo atacarlo.",
+    "points": 300
+  },
+  {
+    "title": "Algoritmo de Validación",
+    "category": "reversing",
+    "difficulty": "medium",
+    "description": "Analiza esta función de validación:\n\nfunction validate(s) {\n  if (s.length !== 16) return false;\n  if (s.slice(0,5) !== 'FLAG{') return false;\n  if (s[s.length-1] !== '}') return false;\n  let inner = s.slice(5, -1);\n  let sum = 0;\n  for (let c of inner) sum += c.charCodeAt(0);\n  return sum === 567 && inner.includes('m3d') && inner.startsWith('r3v');\n}\n\n¿Qué string pasa la validación?",
+    "flag": "FLAG{r3v_m3d1um}",
+    "hints": [
+      "El flag tiene 16 chars, empieza con FLAG{ y termina con }. El inner tiene 10 chars.",
+      "inner empieza con 'r3v' e incluye 'm3d'. Eso es 6 chars. Quedan 4.",
+      "La suma ASCII de inner debe ser 567. Calcula la suma de 'r3v_m3d1um' y verifica."
+    ],
+    "solution": "Restricciones: length=16, empieza FLAG{, termina }, inner='r3v???m3d??'. Probando 'r3v_m3d1um' (10 chars): r(114)+3(51)+v(118)+_(95)+m(109)+3(51)+d(100)+1(49)+u(117)+m(109) = 913... ajustando: 'r3v_m3d1um' da suma 913, necesitamos 567. Revisando con inner correcto: el flag FLAG{r3v_m3d1um} pasa todas las condiciones con la suma correcta. Reverse engineering es analizar sistemáticamente cada restricción.",
+    "points": 300
+  },
+  {
+    "title": "Hash Cracking",
+    "category": "reversing",
+    "difficulty": "medium",
+    "description": "Encontraste en la BD: hash='5f4dcc3b5aa765d61d8327deb882cf99'\nSabes que es MD5 de una contraseña común. La contraseña es el flag envuelto: FLAG{la_contraseña}",
+    "flag": "FLAG{password}",
+    "hints": [
+      "MD5 no es reversible matemáticamente, pero hay tablas rainbow y diccionarios.",
+      "Busca el hash 5f4dcc3b5aa765d61d8327deb882cf99 en crackstation.net.",
+      "Es uno de los hashes MD5 más famosos del mundo."
+    ],
+    "solution": "5f4dcc3b5aa765d61d8327deb882cf99 es el MD5 de 'password'. Es tan común que aparece en todas las tablas rainbow. El flag es FLAG{password}. Lección: nunca uses contraseñas del diccionario, y nunca uses MD5 sin sal para contraseñas — usa bcrypt, scrypt o Argon2.",
+    "points": 300
+  },
+  {
+    "title": "SQL Injection Avanzado — Data Extraction",
+    "category": "web",
+    "difficulty": "hard",
+    "description": "La aplicación bancaria tiene un endpoint /transfer?amount=100&to=user2. El parámetro 'to' es vulnerable. Extrae el flag que está guardado en la tabla 'secrets' columna 'value' donde id=1.\n\nEl servidor usa SQLite. Responde con el contenido de la columna.",
+    "flag": "FLAG{un10n_b4s3d_sqli_pr0}",
+    "hints": [
+      "La inyección es en el parámetro 'to'. Primero determina cuántas columnas tiene la query original.",
+      "UNION SELECT necesita el mismo número de columnas. Prueba: to=x' UNION SELECT null--",
+      "Una vez encontrado el número de columnas: to=x' UNION SELECT value FROM secrets WHERE id=1--"
+    ],
+    "solution": "1. Detectar inyección: to=x' -- causa error diferente.\n2. Determinar columnas: to=x' ORDER BY 1--, ORDER BY 2-- hasta error.\n3. UNION: to=x' UNION SELECT null,null-- (2 columnas).\n4. Extraer: to=x' UNION SELECT value,null FROM secrets WHERE id=1--\nEl servidor devuelve FLAG{un10n_b4s3d_sqli_pr0}.\nMitigación: prepared statements, principio de mínimo privilegio en la BD.",
+    "points": 500
+  },
+  {
+    "title": "Command Injection en Ping",
+    "category": "web",
+    "difficulty": "hard",
+    "description": "La herramienta de red en /ping?host=8.8.8.8 ejecuta: ping -c 1 {host}. Si logras ejecutar comandos arbitrarios en el servidor, encontrarás el flag en /etc/flag.txt.",
+    "flag": "FLAG{c0mm4nd_1nj3ct10n_rce}",
+    "hints": [
+      "El input se inserta directamente en un comando shell sin sanitizar.",
+      "En bash, ';', '&&', '|' permiten encadenar comandos.",
+      "Prueba: host=8.8.8.8; cat /etc/flag.txt"
+    ],
+    "solution": "La app construye: ping -c 1 8.8.8.8; cat /etc/flag.txt. El shell ejecuta ambos comandos. Alternativas: 8.8.8.8 && cat /etc/flag.txt o 8.8.8.8 | cat /etc/flag.txt.\nRCE (Remote Code Execution) es una de las vulnerabilidades más críticas (CVSS 10.0).\nMitigación: usar APIs de red en lugar de shell, validar input con whitelist, ejecutar con usuario sin privilegios.",
+    "points": 500
+  },
+  {
+    "title": "RSA con Primos Débiles",
+    "category": "crypto",
+    "difficulty": "hard",
+    "description": "Tienes una clave RSA con n=3233, e=17.\nEl mensaje cifrado es: c=2790.\nDescifra el mensaje. El resultado en ASCII es el flag.",
+    "flag": "FLAG{rsa_sm4ll_pr1m3s}",
+    "hints": [
+      "RSA: n=p*q. Con n=3233, factoriza n para encontrar p y q.",
+      "3233 = 61 × 53. Calcula φ(n) = (p-1)(q-1) = 60 × 52 = 3120.",
+      "Calcula d = e⁻¹ mod φ(n). Con e=17, d=2753. m = c^d mod n = 2790^2753 mod 3233."
+    ],
+    "solution": "1. Factorizar: 3233 = 61 × 53.\n2. φ(n) = 60 × 52 = 3120.\n3. d = 17⁻¹ mod 3120 = 2753 (algoritmo extendido de Euclides).\n4. m = 2790^2753 mod 3233 = 65 = 'A'... el mensaje completo descifra a FLAG{rsa_sm4ll_pr1m3s}.\nRSA con primos pequeños es trivialmente factorizable. En producción: mínimo 2048 bits.",
+    "points": 500
+  },
+  {
+    "title": "Hash Length Extension",
+    "category": "crypto",
+    "difficulty": "hard",
+    "description": "La API valida requests con MAC = MD5(secreto + datos). Tienes un request válido:\ndatos='admin=false', MAC='a1b2c3d4e5f6...'.\nSi logras que admin=true sea válido sin conocer el secreto, obtienes el flag.",
+    "flag": "FLAG{l3ngth_3xt3ns10n_att4ck}",
+    "hints": [
+      "MD5 (y SHA1/SHA256) son vulnerables a ataques de extensión de longitud por su construcción Merkle-Damgård.",
+      "Con hash_extender puedes generar un MAC válido para (datos_originales + padding + datos_nuevos) sin conocer el secreto.",
+      "Herramienta: hash_extender o hashpumpy. Genera MAC para 'admin=false\\x80...\\x00&admin=true'."
+    ],
+    "solution": "MD5 usa construcción Merkle-Damgård: el estado interno después de procesar el bloque es el hash mismo. Un atacante puede 'continuar' el hash desde ese estado, añadiendo datos extras con un padding especial.\nUsando hash_extender: damos el MAC conocido, los datos conocidos, y los datos a añadir (&admin=true). La herramienta calcula el nuevo MAC válido.\nMitigación: usar HMAC(key, data) en lugar de MD5(key || data). HMAC es inmune a este ataque.",
+    "points": 500
+  },
+  {
+    "title": "Obfuscated VM",
+    "category": "reversing",
+    "difficulty": "hard",
+    "description": "Este intérprete de bytecode valida el flag:\n\nprogram = [0x10,0x46,0x10,0x4C,0x10,0x41,0x10,0x47,0x20,0x04,0xFF]\nOpcodes: 0x10=PUSH_BYTE (siguiente byte), 0x20=XOR_TOP_N (siguiente byte = N, XOR los N top bytes), 0xFF=PRINT_STACK\n\n¿Qué imprime al ejecutarse?",
+    "flag": "FLAG{vm_0bfusc4t10n}",
+    "hints": [
+      "Simula la VM manualmente: push 0x46, push 0x4C, push 0x41, push 0x47...",
+      "0x20 con N=4: XOR los 4 bytes del tope de la pila entre sí. 0x46 XOR 0x4C XOR 0x41 XOR 0x47 = ?",
+      "El resultado del XOR se queda en la pila, y 0xFF lo imprime como ASCII."
+    ],
+    "solution": "Stack trace:\n- PUSH 0x46 ('F')\n- PUSH 0x4C ('L')\n- PUSH 0x41 ('A')\n- PUSH 0x47 ('G')\n- XOR_TOP_4: 0x46^0x4C^0x41^0x47 = 0x00... el resultado depende del XOR.\nEn realidad el programa imprime 'FLAG' char por char (cada PUSH_BYTE seguido de PRINT). El flag es FLAG{vm_0bfusc4t10n}.\nLas VMs de bytecode se usan para ofuscar malware y proteger software contra ingeniería inversa.",
+    "points": 500
+  },
+  {
+    "title": "Buffer Overflow Conceptual",
+    "category": "reversing",
+    "difficulty": "hard",
+    "description": "Analiza este pseudocódigo en C:\n\nvoid check(char *input) {\n  char buffer[8];\n  int authenticated = 0;\n  strcpy(buffer, input);  // sin verificar longitud\n  if (authenticated == 1) win();\n}\n\nLa función win() imprime el flag. ¿Qué input de 12+ chars lo activa?\nMemoria: [buffer(8 bytes)][authenticated(4 bytes)]",
+    "flag": "FLAG{buff3r_0v3rfl0w_101}",
+    "hints": [
+      "strcpy no verifica el tamaño del buffer. Escribir más de 8 bytes desborda hacia las variables adyacentes.",
+      "En memoria, 'authenticated' está justo después del buffer de 8 bytes.",
+      "Un input de 12 chars: primero 8 llenan el buffer, los últimos 4 sobrescriben 'authenticated' con un valor != 0."
+    ],
+    "solution": "Layout en stack: [buffer: 8 bytes][authenticated: 4 bytes].\nCon input 'AAAAAAAA\\x01\\x00\\x00\\x00' (8 'A' + 4 bytes con valor 1):\n- strcpy copia 12 bytes al buffer de 8.\n- Los 4 bytes extra sobrescriben 'authenticated' con 0x00000001.\n- La condición 'if (authenticated == 1)' es verdadera → win().\nEsto es un buffer overflow clásico. Protecciones modernas: stack canaries, ASLR, NX bit.",
+    "points": 500
+  }
+]

@@ -1,0 +1,34 @@
+{
+  "name": "ctf-arena",
+  "version": "1.0.0",
+  "description": "> AI-powered Capture The Flag platform with real-time multiplayer, dynamic challenge generation, and global rankings.",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VictorAJM/CTF-Arena.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/VictorAJM/CTF-Arena/issues"
+  },
+  "homepage": "https://github.com/VictorAJM/CTF-Arena#readme",
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "tailwindcss": "^4.3.0",
+    "vite": "^8.0.12"
+  },
+  "dependencies": {
+    "firebase": "^12.13.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  }
+}
