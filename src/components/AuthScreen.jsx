@@ -36,7 +36,8 @@ export default function AuthScreen() {
         await register(email, password, displayName.trim());
       }
     } catch (err) {
-      setError(FIREBASE_ERRORS[err.code] || "Error inesperado. Intenta de nuevo.");
+      console.error("Auth error:", err.code, err.message, err);
+      setError(FIREBASE_ERRORS[err.code] || `Error inesperado [${err.code ?? err.message}]`);
     } finally {
       setLoading(false);
     }
@@ -48,7 +49,8 @@ export default function AuthScreen() {
     try {
       await loginWithGoogle();
     } catch (err) {
-      setError(FIREBASE_ERRORS[err.code] || "Error al iniciar con Google.");
+      console.error("Google auth error:", err.code, err.message, err);
+      setError(FIREBASE_ERRORS[err.code] || `Error al iniciar con Google [${err.code ?? err.message}]`);
     } finally {
       setLoading(false);
     }
