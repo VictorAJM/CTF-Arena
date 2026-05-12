@@ -5,10 +5,17 @@ import CategorySelector from "./components/CategorySelector";
 import DifficultySelector from "./components/DifficultySelector";
 import ChallengeCard from "./components/ChallengeCard";
 import UserProfile from "./components/UserProfile";
+import GlobalScoreboard from "./components/GlobalScoreboard";
+
+const NAV = [
+  { id: "home", label: "JUGAR" },
+  { id: "ranking", label: "RANKING" },
+  { id: "profile", label: "PERFIL" },
+];
 
 export default function App() {
   const { user, loading, logout } = useAuth();
-  const [screen, setScreen] = useState("home"); // "home" | "profile"
+  const [screen, setScreen] = useState("home");
   const [category, setCategory] = useState(null);
   const [difficulty, setDifficulty] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
@@ -23,9 +30,8 @@ export default function App() {
 
   if (!user) return <AuthScreen />;
 
-  if (screen === "profile") {
-    return <UserProfile onBack={() => setScreen("home")} />;
-  }
+  if (screen === "profile") return <UserProfile onBack={() => setScreen("home")} />;
+  if (screen === "ranking") return <GlobalScoreboard onBack={() => setScreen("home")} />;
 
   function handleStart() {
     if (category && difficulty) setGameStarted(true);
@@ -46,20 +52,28 @@ export default function App() {
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">AI-powered Capture The Flag</p>
         </div>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setScreen("profile")}
-            className="text-xs text-gray-400 hover:text-[#00ff41] transition-colors tracking-widest"
-          >
-            {user.displayName || user.email.split("@")[0]}
-          </button>
+
+        <nav className="flex items-center gap-1">
+          {NAV.map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => { setScreen(id); if (id === "home") handleReset(); }}
+              className={`px-3 py-1.5 text-xs tracking-widest transition-colors ${
+                screen === id
+                  ? "bg-[#00ff41] text-black font-bold"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
           <button
             onClick={logout}
-            className="text-xs text-gray-600 hover:text-red-500 transition-colors"
+            className="ml-3 text-xs text-gray-600 hover:text-red-500 transition-colors"
           >
             SALIR
           </button>
-        </div>
+        </nav>
       </header>
 
       {!gameStarted ? (

@@ -32,6 +32,7 @@ export function useUserScores() {
     if (solved && pointsEarned > 0) {
       await updateDoc(doc(db, "users", uid), {
         totalScore: increment(pointsEarned),
+        solvedCount: increment(1),
       });
     }
 
