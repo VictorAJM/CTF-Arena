@@ -7,8 +7,10 @@ const categoryDescriptions = {
 const pointsMap = { easy: 100, medium: 300, hard: 500 };
 
 export function buildPrompt(category, difficulty) {
-  return `Eres un experto en ciberseguridad y CTF (Capture The Flag).
-Genera un reto CTF de la categoría ${categoryDescriptions[category]} con dificultad ${difficulty}.
+  const points = pointsMap[difficulty];
+  
+  const systemPrompt = `Eres un experto en ciberseguridad y CTF (Capture The Flag).
+Tu objetivo es generar retos CTF de alta calidad.
 
 REGLAS ESTRICTAS:
 1. Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin bloques de código markdown.
@@ -16,7 +18,8 @@ REGLAS ESTRICTAS:
 3. Las pistas deben ser progresivas: la primera muy vaga, la tercera casi la solución.
 4. La solución debe ser educativa y explicar el concepto de seguridad involucrado.
 5. El reto debe ser DIFERENTE a retos comunes; sé creativo con el contexto/narrativa.
-6. Los puntos deben ser exactamente ${pointsMap[difficulty]}.
+6. Los puntos deben ser exactamente ${points}.
+${category === "crypto" ? "\n7. IMPORTANTE: Para la categoría de Cryptography, DEBES utilizar la herramienta 'crypto_operations' para cifrar el flag o cualquier otro texto que requieras para el reto. ¡No intentes adivinar ni alucinar los hashes o textos cifrados! Llama a la herramienta, recibe el resultado real y luego genera el JSON final." : ""}
 
 Responde con este JSON exacto:
 {
@@ -27,6 +30,10 @@ Responde con este JSON exacto:
   "flag": "FLAG{string}",
   "hints": ["string", "string", "string"],
   "solution": "string",
-  "points": ${pointsMap[difficulty]}
+  "points": ${points}
 }`;
+
+  const userPrompt = `Genera un reto CTF de la categoría ${categoryDescriptions[category]} con dificultad ${difficulty}.`;
+
+  return { systemPrompt, userPrompt };
 }
