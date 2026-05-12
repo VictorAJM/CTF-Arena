@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useChallenge } from "../hooks/useChallenge";
 import { useScore } from "../hooks/useScore";
+import { useUserScores } from "../hooks/useUserScores";
+import { useAuth } from "../context/AuthContext";
 import { SCORING } from "../constants/config";
 import HintSystem from "./HintSystem";
 import FlagValidator from "./FlagValidator";
@@ -10,6 +12,8 @@ import Scoreboard from "./Scoreboard";
 export default function ChallengeCard({ category, difficulty, onReset }) {
   const { challenge, loading, error, fetchChallenge } = useChallenge();
   const { completedChallenges, totalScore, recordResult } = useScore();
+  const { saveScore } = useUserScores();
+  const { user } = useAuth();
   const [hintsUsed, setHintsUsed] = useState(0);
   const [phase, setPhase] = useState("playing"); // "playing" | "solved" | "surrendered"
 
@@ -23,11 +27,13 @@ export default function ChallengeCard({ category, difficulty, onReset }) {
 
   function handleFlagSuccess() {
     recordResult({ challenge, hintsUsed, solved: true });
+    if (user) saveScore(user.uid, challenge, hintsUsed, true).catch(console.error);
     setPhase("solved");
   }
 
   function handleSurrender() {
     recordResult({ challenge, hintsUsed, solved: false });
+    if (user) saveScore(user.uid, challenge, hintsUsed, false).catch(console.error);
     setPhase("surrendered");
   }
 

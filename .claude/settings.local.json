@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(New-Item *)"
+      "PowerShell(New-Item *)",
+      "Bash(npm run *})",
+      "Bash(npm run *)",
+      "Bash(node *)"
     ]
   }
 }
