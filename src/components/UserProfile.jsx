@@ -27,7 +27,7 @@ export default function UserProfile({ onBack }) {
       .finally(() => setLoading(false));
   }, [user.uid]);
 
-  const totalScore = scores.reduce((s, c) => s + c.pointsEarned, 0);
+  const totalScore = scores.reduce((s, c) => s + (c.pointsEarned ?? 0), 0);
   const solved = scores.filter((c) => c.solved).length;
   const byCategory = ["web", "crypto", "reversing"].map((cat) => ({
     cat,

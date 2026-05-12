@@ -16,6 +16,7 @@ export default function ChallengeCard({ category, difficulty, onReset }) {
   const { user } = useAuth();
   const [hintsUsed, setHintsUsed] = useState(0);
   const [phase, setPhase] = useState("playing"); // "playing" | "solved" | "surrendered"
+  const [resetKey, setResetKey] = useState(0);
 
   useEffect(() => {
     fetchChallenge(category, difficulty);
@@ -40,6 +41,7 @@ export default function ChallengeCard({ category, difficulty, onReset }) {
   function handleNext() {
     setHintsUsed(0);
     setPhase("playing");
+    setResetKey((k) => k + 1);
     fetchChallenge(category, difficulty);
   }
 
@@ -92,7 +94,8 @@ export default function ChallengeCard({ category, difficulty, onReset }) {
         </p>
 
         {phase === "playing" && (
-          <>
+          <div key={resetKey}>
+            <div className="space-y-4">
             <HintSystem
               hints={challenge.hints}
               penalty={penalty}
@@ -108,7 +111,8 @@ export default function ChallengeCard({ category, difficulty, onReset }) {
             >
               Rendirse (ver solución)
             </button>
-          </>
+            </div>
+          </div>
         )}
       </div>
 
