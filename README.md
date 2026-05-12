@@ -1,26 +1,26 @@
-# ⚔️ CTF Arena
+# CTF Arena
 
-> AI-powered Capture The Flag platform with real-time multiplayer, dynamic challenge generation, and global rankings.
+AI-powered Capture The Flag platform with dynamic challenge generation, progressive hints, real-time multiplayer, and global rankings.
 
 ---
 
-## What is CTF Arena?
+## Overview
 
-CTF Arena is a web app that uses AI to generate infinite, unique Capture The Flag challenges across three categories: **Web Exploitation**, **Cryptography**, and **Reverse Engineering**. No two sessions are the same — every challenge is generated on the fly by Claude, complete with progressive hints, a scoring system, and a step-by-step solution at the end.
+CTF Arena generates unique challenges on demand using the Claude API. Every challenge comes with a realistic scenario, a hidden flag, three progressive hints, and a full walkthrough — so every session is both a competition and a learning experience.
 
-Compete solo or create a room and challenge your friends in real time.
+Compete solo to climb the global leaderboard, or create a room and race your team to the flag.
 
 ---
 
 ## Features
 
-- **AI-Generated Challenges** — Claude generates a unique title, description, flag, hints, and solution every time. No repeated challenges.
-- **3 Categories × 3 Difficulty Levels** — Web, Crypto, and Reversing across Easy, Medium, and Hard.
-- **Progressive Hints** — Up to 3 hints per challenge, each one more specific. Using hints costs points.
-- **Multiplayer Rooms** — Create a room with a 6-character code, invite friends, and race to solve the same challenge simultaneously.
-- **Global Scoreboard** — Persistent rankings across all registered users, updated in real time.
-- **Auth & Profiles** — Sign up with email or Google. Your history, stats, and score are saved across sessions.
-- **Solutions Explained** — Whether you solve it or give up, you always learn the concept behind the challenge.
+- **AI-generated challenges** — unique title, description, flag, hints, and solution every time via Claude
+- **9 combinations** — Web Exploitation, Cryptography, and Reverse Engineering across Easy, Medium, and Hard
+- **Progressive hints** — 3 hints per challenge, each more specific; using them costs points
+- **Multiplayer rooms** — 6-character room codes, shared challenge, first correct flag wins
+- **Global leaderboard** — persistent rankings across all users, updated in real time
+- **Auth & profiles** — email or Google sign-in; history and score persist across sessions
+- **Always learn** — solve it or give up, the full solution is always revealed at the end
 
 ---
 
@@ -28,8 +28,8 @@ Compete solo or create a room and challenge your friends in real time.
 
 | Layer | Technology |
 |---|---|
-| Frontend | React + Tailwind CSS |
-| AI Engine | Anthropic Claude API (`claude-sonnet-4`) |
+| Frontend | React 18 + Tailwind CSS |
+| AI | Anthropic Claude API |
 | Auth | Firebase Authentication |
 | Database | Firebase Firestore |
 | Multiplayer | Firebase Realtime Database |
@@ -39,13 +39,7 @@ Compete solo or create a room and challenge your friends in real time.
 
 ## Getting Started
 
-### Prerequisites
-
-- Node.js 18+
-- A [Firebase](https://firebase.google.com) project with Auth, Firestore, and Realtime Database enabled
-- An [Anthropic API key](https://console.anthropic.com)
-
-### Installation
+**Prerequisites:** Node.js 18+, a Firebase project with Auth + Firestore + Realtime Database, and an Anthropic API key.
 
 ```bash
 git clone https://github.com/your-team/ctf-arena.git
@@ -53,9 +47,7 @@ cd ctf-arena
 npm install
 ```
 
-### Environment Variables
-
-Create a `.env.local` file in the root of the project:
+Create `.env.local` in the project root:
 
 ```env
 VITE_ANTHROPIC_API_KEY=sk-ant-...
@@ -69,15 +61,13 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=...
 VITE_FIREBASE_APP_ID=...
 ```
 
-> ⚠️ Never commit `.env.local`. It is already listed in `.gitignore`.
-
-### Run locally
+> Never commit `.env.local` — it is already in `.gitignore`.
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser.
+Open [http://localhost:5173](http://localhost:5173).
 
 ---
 
@@ -112,7 +102,6 @@ ctf-arena/
 │   ├── App.jsx
 │   └── main.jsx
 ├── CLAUDE.md
-├── .env.local         ← not committed
 └── package.json
 ```
 
@@ -120,37 +109,34 @@ ctf-arena/
 
 ## Scoring
 
-| Difficulty | Base Points | Hint Penalty | Minimum |
+| Difficulty | Base | Hint Penalty | Minimum |
 |---|---|---|---|
-| Easy | 100 pts | −10 pts | 50 pts |
-| Medium | 300 pts | −30 pts | 150 pts |
-| Hard | 500 pts | −50 pts | 250 pts |
+| Easy | 100 pts | −10 per hint | 50 pts |
+| Medium | 300 pts | −30 per hint | 150 pts |
+| Hard | 500 pts | −50 per hint | 250 pts |
 
-- Maximum 3 hints per challenge.
-- Giving up awards 0 points, but unlocks the full solution.
-- Multiplayer scores are saved to the global leaderboard.
+Giving up awards 0 points but unlocks the full solution. Multiplayer scores are saved to the global leaderboard.
 
 ---
 
 ## Multiplayer
 
-1. Sign in and go to **Multiplayer**.
-2. Create a room — you'll get a 6-character code.
-3. Share the code with your team.
-4. Once everyone's in, the host starts the match.
-5. Claude generates one challenge for the entire room. First to submit the correct flag wins.
+1. Sign in and open **Multiplayer**
+2. Create a room — share the 6-character code with your team
+3. Host starts the match; Claude generates one challenge for the entire room
+4. First player to submit the correct flag wins the round
 
 ---
 
 ## Development
 
 ```bash
-npm run dev        # Start dev server
-npm run build      # Production build
-npm run preview    # Preview production build locally
+npm run dev       # dev server
+npm run build     # production build
+npm run preview   # preview production build locally
 ```
 
-See [CLAUDE.md](./CLAUDE.md) for detailed developer documentation: API integration, prompt engineering, Firestore schema, and coding conventions.
+See [CLAUDE.md](./CLAUDE.md) for full developer docs: API integration, prompt engineering, Firestore schema, and coding conventions.
 
 ---
 
@@ -167,4 +153,4 @@ See [CLAUDE.md](./CLAUDE.md) for detailed developer documentation: API integrati
 
 ## License
 
-This project was built for an academic cybersecurity course. Not licensed for commercial use.
+Built for an academic cybersecurity course. Not licensed for commercial use.
