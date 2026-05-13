@@ -39,7 +39,8 @@ ctf-challenge-builder/
 │   │   ├── useChallenge.js          # Lógica de generación y estado del reto
 │   │   └── useScore.js              # Lógica de puntuación
 │   ├── utils/
-│   │   ├── claudeApi.js             # Wrapper de la Anthropic API
+│   │   ├── claudeApi.js             # Wrapper de la Anthropic API (con tool calling y caching)
+│   │   ├── cryptoTools.js           # Herramientas criptográficas locales para Claude
 │   │   ├── promptBuilder.js         # Construcción del prompt por categoría/dificultad
 │   │   └── flagValidator.js         # Normalización y comparación del flag
 │   ├── constants/
@@ -70,34 +71,48 @@ VITE_ANTHROPIC_API_KEY=sk-ant-...
 Toda la integración está en `src/utils/claudeApi.js`:
 
 ```javascript
-// src/utils/claudeApi.js
-export async function generateChallenge(category, difficulty) {
-  const prompt = buildPrompt(category, difficulty);
+// src/utils/claudeApi.js (Resumido)
+import { buildPrompt } from "./promptBuilder";
+import { CRYPTO_TOOLS_DEF, executeCryptoTool } from "./cryptoTools";
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
+async function fetchFromClaude(category, difficulty) {
+  const { systemPrompt, userPrompt } = buildPrompt(category, difficulty);
+  const tools = category === "crypto" ? CRYPTO_TOOLS_DEF : undefined;
+  
+  let messages = [{ role: "user", content: userPrompt }];
+  
+  // Loop para soportar uso de herramientas
+  for (let loop = 0; loop < 5; loop++) {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1024,
+        system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
+        tools,
+        messages,
+      }),
+    });
 
-  const data = await response.json();
-  const text = data.content[0].text;
+    const data = await response.json();
+    messages.push({ role: "assistant", content: data.content });
 
-  // Parseo defensivo del JSON
-  try {
-    const clean = text.replace(/```json|```/g, "").trim();
-    return JSON.parse(clean);
-  } catch (err) {
-    console.error("Error parseando respuesta de Claude:", err);
-    throw new Error("La IA generó un reto con formato inválido. Reintentando...");
+    if (data.stop_reason === "tool_use") {
+      // Ejecutar herramienta local (ej. cifrado o hash) y devolver "tool_result"
+      const toolResults = procesarHerramientasLocales(data.content);
+      messages.push({ role: "user", content: toolResults });
+      continue;
+    }
+
+    // Retornar JSON parseado
+    const textBlock = data.content.find(c => c.type === "text");
+    return JSON.parse(textBlock.text.replace(/```json|```/g, "").trim());
   }
 }
 ```
@@ -145,18 +160,16 @@ export function buildPrompt(category, difficulty) {
     reversing: "Reverse Engineering (análisis de pseudocódigo, algoritmos ofuscados, decodificación de patrones)",
   };
 
-  const pointsMap = { easy: 100, medium: 300, hard: 500 };
+  const points = pointsMap[difficulty];
 
-  return `Eres un experto en ciberseguridad y CTF (Capture The Flag). 
-Genera un reto CTF de la categoría ${categoryDescriptions[category]} con dificultad ${difficulty}.
+  const systemPrompt = `Eres un experto en ciberseguridad y CTF (Capture The Flag).
+Tu objetivo es generar retos CTF de alta calidad.
 
 REGLAS ESTRICTAS:
 1. Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin bloques de código markdown.
 2. El flag SIEMPRE debe tener el formato FLAG{...} con contenido relacionado al reto.
-3. Las pistas deben ser progresivas: la primera muy vaga, la tercera casi la solución.
-4. La solución debe ser educativa y explicar el concepto de seguridad involucrado.
-5. El reto debe ser DIFERENTE a retos comunes; sé creativo con el contexto/narrativa.
-6. Los puntos deben ser exactamente ${pointsMap[difficulty]}.
+// ... (otras reglas) ...
+${category === "crypto" ? "\\n7. IMPORTANTE: Para la categoría de Cryptography, DEBES utilizar la herramienta 'crypto_operations' para cifrar el flag o cualquier otro texto que requieras para el reto. ¡No intentes adivinar ni alucinar los hashes o textos cifrados! Llama a la herramienta, recibe el resultado real y luego genera el JSON final." : ""}
 
 Responde con este JSON exacto:
 {

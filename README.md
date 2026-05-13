@@ -95,6 +95,7 @@ ctf-arena/
 │   │   └── useUserScores.js
 │   ├── utils/
 │   │   ├── claudeApi.js
+│   │   ├── cryptoTools.js
 │   │   ├── promptBuilder.js
 │   │   └── flagValidator.js
 │   ├── data/

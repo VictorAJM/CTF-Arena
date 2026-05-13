@@ -7,7 +7,7 @@ const MAX_TOOL_LOOPS = 5;
 
 async function fetchFromClaude(category, difficulty) {
   const { systemPrompt, userPrompt } = buildPrompt(category, difficulty);
-  
+
   const system = [
     {
       type: "text",
@@ -64,7 +64,7 @@ async function fetchFromClaude(category, difficulty) {
           } catch (e) {
             resultText = `Error: ${e.message}`;
           }
-          
+
           toolResults.push({
             type: "tool_result",
             tool_use_id: block.id,
@@ -72,18 +72,18 @@ async function fetchFromClaude(category, difficulty) {
           });
         }
       }
-      
+
       messages.push({ role: "user", content: toolResults });
       continue;
     }
 
     const textBlock = data.content.find(c => c.type === "text");
     if (!textBlock) throw new Error("No text content returned by API");
-    
+
     const clean = textBlock.text.replace(/```json|```/g, "").trim();
     return JSON.parse(clean);
   }
-  
+
   throw new Error("Exceeded maximum tool execution loops");
 }
 
