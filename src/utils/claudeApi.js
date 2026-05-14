@@ -1,6 +1,7 @@
 import { buildPrompt } from "./promptBuilder";
 import { getFallbackChallenge } from "./fallbackLoader";
 import { CRYPTO_TOOLS_DEF, executeCryptoTool } from "./cryptoTools";
+import { WEB_TOOLS_DEF, executeWebTool } from "./webTools";
 
 const MAX_RETRIES = 2;
 const MAX_TOOL_LOOPS = 5;
@@ -20,7 +21,7 @@ async function fetchFromClaude(category, difficulty) {
     { role: "user", content: userPrompt }
   ];
 
-  const tools = category === "crypto" ? CRYPTO_TOOLS_DEF : undefined;
+  const tools = category === "crypto" ? CRYPTO_TOOLS_DEF : category === "web" ? WEB_TOOLS_DEF : undefined;
 
   for (let loop = 0; loop < MAX_TOOL_LOOPS; loop++) {
     const payload = {
@@ -58,6 +59,8 @@ async function fetchFromClaude(category, difficulty) {
           try {
             if (block.name === "crypto_operations") {
               resultText = executeCryptoTool(block);
+            } else if (block.name === "generate_web_environment") {
+              resultText = await executeWebTool(block);
             } else {
               resultText = `Unknown tool: ${block.name}`;
             }
