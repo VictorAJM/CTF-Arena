@@ -6,6 +6,7 @@ import { useUserScores } from "../hooks/useUserScores";
 import { SCORING } from "../constants/config";
 import HintSystem from "./HintSystem";
 import FlagValidator from "./FlagValidator";
+import ChallengeDescription from "./ChallengeDescription";
 
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60).toString().padStart(2, "0");
@@ -195,9 +196,7 @@ export default function MultiplayerRoom({ roomCode, challenge, timerEnd, onFinis
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Challenge + interaction */}
         <div className="lg:col-span-2 border border-gray-800 p-4 space-y-4">
-          <p className="text-sm text-gray-300 leading-relaxed border-l-2 border-gray-700 pl-3">
-            {challenge.description}
-          </p>
+          <ChallengeDescription description={challenge.description} />
 
           {phase === "playing" && (
             <>
