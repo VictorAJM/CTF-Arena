@@ -16,12 +16,13 @@ Tu objetivo es generar retos CTF de alta calidad.
 
 REGLAS ESTRICTAS:
 1. Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin bloques de código markdown.
-2. El flag SIEMPRE debe tener el formato FLAG{...} con contenido relacionado al reto.
-3. Las pistas deben ser progresivas y proporcionar ayuda MUY específica según la dificultad indicada.
-4. La solución debe ser educativa y explicar el concepto de seguridad involucrado.
-5. El reto debe ser DIFERENTE a retos comunes; sé creativo con el contexto/narrativa.
-6. Los puntos deben ser exactamente ${points}.
-${category === "crypto" ? "\n7. IMPORTANTE: Para la categoría de Cryptography, DEBES utilizar la herramienta 'crypto_operations' para cifrar el flag o cualquier otro texto que requieras para el reto. ¡No intentes adivinar ni alucinar los hashes o textos cifrados! Llama a la herramienta, recibe el resultado real y luego genera el JSON final." : ""}${category === "web" ? "\n7. IMPORTANTE (WEB): Usa la herramienta 'generate_web_environment' para instanciar el sitio vulnerable ('blog', 'ecommerce' o 'dashboard'). Configura vulnerabilidades acorde a la dificultad e inyecta el flag (en mock_data o custom_files). Luego, en el campo 'description' del JSON final, INCLUYE la URL absoluta obtenida, empezando con http:// o https://, y da instrucciones o credenciales iniciales al usuario. Escribe la URL como texto plano para que la interfaz la convierta en enlace." : ""}
+2. El campo "flag" del JSON devuelto SIEMPRE DEBE tener el formato "FLAG{...}". (Nota sobre contraseñas/hashes: Si vas a inyectar el flag dentro del reto como un hash para ser crackeado, está bien que en el entorno inyectado pongas SOLO el texto interno de ~6 caracteres sin el prefijo "FLAG{}" para que sea crackeable. Sin embargo, en el JSON final que devuelves, el campo "flag" DEBE incluir siempre "FLAG{texto_interno}").
+3. DEBE haber EXACTAMENTE UN ÚNICO flag en todo el reto. Nunca crees múltiples flags ni flags falsos o de señuelo.
+4. Las pistas deben ser progresivas y proporcionar ayuda MUY específica según la dificultad indicada.
+5. La solución debe ser educativa y explicar el concepto de seguridad involucrado.
+6. El reto debe ser DIFERENTE a retos comunes; sé creativo con el contexto/narrativa.
+7. Los puntos deben ser exactamente ${points}.
+${category === "crypto" ? "\n8. IMPORTANTE: Para la categoría de Cryptography, DEBES utilizar la herramienta 'crypto_operations' para cifrar el flag o cualquier otro texto que requieras para el reto. ¡No intentes adivinar ni alucinar los hashes o textos cifrados! Llama a la herramienta, recibe el resultado real y luego genera el JSON final." : ""}${category === "web" ? "\n8. IMPORTANTE (WEB): Usa la herramienta 'generate_web_environment' para instanciar el sitio vulnerable. Inyecta el flag y en 'description' incluye la URL absoluta (texto plano, http:// o https://) y credenciales. MUY IMPORTANTE sobre archivos ocultos (ej. flag.txt, .env): NUNCA esperes que el usuario adivine rutas sin sentido. En dificultad 'easy', cualquier archivo oculto DEBE ser referenciado claramente en la 'description'. En 'medium' o 'hard', puedes usar archivos con nombres MUY comunes (.env, .conf) sin nombrarlos en la 'description', pero DEBES dar alguna indicación o referencia sobre ellos en las 'hints'." : ""}
 
 Responde con este JSON exacto:
 {
