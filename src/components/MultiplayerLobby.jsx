@@ -125,12 +125,21 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
       }
 
       const { category, difficulty } = pickRandomChallengeConfig(settings);
-      const challenge = await generateChallenge(category, difficulty);
+      const challenge = await generateChallenge(category, difficulty, {
+        hostInstructions: settings.hostInstructions,
+      });
       const latestRoomSnap = await get(ref(rtdb, `rooms/${roomCode}`));
       if (!latestRoomSnap.exists()) throw new Error("room-not-found");
       const players = latestRoomSnap.val()?.players ?? { [user.uid]: makePlayerEntry(user) };
+      const nextSettings = {
+        ...settings,
+        hostInstructions: "",
+      };
 
-      await update(ref(rtdb, `rooms/${roomCode}`), buildRoundUpdate(challenge, players));
+      await update(ref(rtdb, `rooms/${roomCode}`), {
+        ...buildRoundUpdate(challenge, players),
+        settings: nextSettings,
+      });
       // onGameStart fires via onValue listener
     } catch {
       setError("Error generando el reto. Intenta de nuevo.");
