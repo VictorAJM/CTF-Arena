@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react";
-import { ref, update, onValue } from "firebase/database";
+import { useState, useEffect, useRef } from "react";
+import { ref, update, onValue, remove, get } from "firebase/database";
 import { rtdb } from "../utils/firebase";
 import { useAuth } from "../context/AuthContext";
 import { useUserScores } from "../hooks/useUserScores";
 import { SCORING } from "../constants/config";
+import { generateChallenge } from "../utils/claudeApi";
+import { buildRoundUpdate, pickRandomChallengeConfig } from "../utils/multiplayer";
 import HintSystem from "./HintSystem";
 import FlagValidator from "./FlagValidator";
 import ChallengeDescription from "./ChallengeDescription";
@@ -15,79 +17,114 @@ function formatTime(seconds) {
 }
 
 const PLAYER_STATUS = {
-  solving:    { label: "Resolviendo...", color: "text-yellow-400" },
-  solved:     { label: "✓ Resuelto",    color: "text-[#00ff41]"  },
-  surrendered:{ label: "✗ Se rindió",   color: "text-red-500"    },
+  solving: { label: "Resolviendo...", color: "text-yellow-400" },
+  solved: { label: "Resuelto", color: "text-[#00ff41]" },
+  surrendered: { label: "Se rindio", color: "text-red-500" },
 };
 
-function getPlayerStatus(p) {
-  if (p.solved) return "solved";
-  if (p.surrendered) return "surrendered";
+function getPlayerStatus(player) {
+  if (player.solved) return "solved";
+  if (player.surrendered) return "surrendered";
   return "solving";
 }
 
 function sortPlayers(players) {
   return Object.entries(players).sort(([, a], [, b]) => {
-    // Solved players first, ordered by solve time
     if (a.solved && !b.solved) return -1;
     if (!a.solved && b.solved) return 1;
     if (a.solved && b.solved) return a.solvedAt - b.solvedAt;
-    // Surrendered last
     if (a.surrendered && !b.surrendered) return 1;
     if (!a.surrendered && b.surrendered) return -1;
     return 0;
   });
 }
 
-export default function MultiplayerRoom({ roomCode, challenge, timerEnd, onFinished }) {
+export default function MultiplayerRoom({
+  roomCode,
+  challenge: initialChallenge,
+  timerEnd: initialTimerEnd,
+  roundId: initialRoundId,
+  isHost = false,
+  onExitGroup,
+}) {
   const { user } = useAuth();
   const { saveScore } = useUserScores();
 
-  const { base, hintPenalty, minPoints } = SCORING[challenge.difficulty];
-
+  const [activeChallenge, setActiveChallenge] = useState(initialChallenge);
+  const [activeTimerEnd, setActiveTimerEnd] = useState(initialTimerEnd);
   const [players, setPlayers] = useState({});
   const [gameStatus, setGameStatus] = useState("playing");
   const [timeLeft, setTimeLeft] = useState(
-    Math.max(0, Math.ceil((timerEnd - Date.now()) / 1000))
+    Math.max(0, Math.ceil((initialTimerEnd - Date.now()) / 1000))
   );
-  const [phase, setPhase] = useState("playing"); // "playing" | "solved" | "surrendered"
+  const [phase, setPhase] = useState("playing");
   const [hintsUsed, setHintsUsed] = useState(0);
+  const [roundLoading, setRoundLoading] = useState(false);
+  const [roundError, setRoundError] = useState(null);
 
-  // Sync room state in real-time
+  const activeRoundRef = useRef(initialRoundId ?? initialTimerEnd);
+  const { base, hintPenalty, minPoints } =
+    SCORING[activeChallenge?.difficulty] ?? SCORING.easy;
+
   useEffect(() => {
-    const unsub = onValue(ref(rtdb, `rooms/${roomCode}`), (snap) => {
+    const roomRef = ref(rtdb, `rooms/${roomCode}`);
+    const unsub = onValue(roomRef, (snap) => {
       const data = snap.val();
-      if (!data) return;
-
-      const ps = data.players ?? {};
-      setPlayers(ps);
-
-      if (data.status === "finished") {
-        setGameStatus("finished");
+      if (!data) {
+        onExitGroup?.();
         return;
       }
 
-      // Auto-finish when every player is done
-      const allDone = Object.values(ps).every((p) => p.solved || p.surrendered);
-      if (allDone && data.status === "playing") {
-        update(ref(rtdb, `rooms/${roomCode}`), { status: "finished" });
+      const nextPlayers = data.players ?? {};
+      setPlayers(nextPlayers);
+
+      if (data.status === "playing" && data.challenge && data.timerEnd) {
+        const nextRoundId = data.roundId ?? data.timerEnd;
+        const isNewRound = nextRoundId !== activeRoundRef.current;
+
+        setActiveChallenge(data.challenge);
+        setActiveTimerEnd(data.timerEnd);
+        setTimeLeft(Math.max(0, Math.ceil((data.timerEnd - Date.now()) / 1000)));
+        setGameStatus("playing");
+
+        if (isNewRound) {
+          activeRoundRef.current = nextRoundId;
+          setPhase("playing");
+          setHintsUsed(0);
+          setRoundError(null);
+        }
+
+        const allDone =
+          Object.keys(nextPlayers).length > 0 &&
+          Object.values(nextPlayers).every((player) => player.solved || player.surrendered);
+
+        if (allDone) {
+          update(roomRef, { status: "finished" });
+        }
+        return;
+      }
+
+      if (data.status === "finished") {
+        setGameStatus("finished");
       }
     });
-    return () => unsub();
-  }, [roomCode]);
 
-  // Countdown timer
+    return () => unsub();
+  }, [roomCode, onExitGroup]);
+
   useEffect(() => {
-    if (gameStatus === "finished") return;
+    if (gameStatus !== "playing" || !activeTimerEnd) return;
+
     const interval = setInterval(() => {
-      const remaining = Math.max(0, Math.ceil((timerEnd - Date.now()) / 1000));
+      const remaining = Math.max(0, Math.ceil((activeTimerEnd - Date.now()) / 1000));
       setTimeLeft(remaining);
       if (remaining === 0) {
         update(ref(rtdb, `rooms/${roomCode}`), { status: "finished" });
       }
     }, 1000);
+
     return () => clearInterval(interval);
-  }, [timerEnd, gameStatus, roomCode]);
+  }, [activeTimerEnd, gameStatus, roomCode]);
 
   async function handleSolve() {
     const pointsEarned = Math.max(base - hintsUsed * hintPenalty, minPoints);
@@ -97,7 +134,7 @@ export default function MultiplayerRoom({ roomCode, challenge, timerEnd, onFinis
       pointsEarned,
       solvedAt: Date.now(),
     });
-    saveScore(user.uid, challenge, hintsUsed, true).catch(console.error);
+    saveScore(user.uid, activeChallenge, hintsUsed, true).catch(console.error);
     setPhase("solved");
   }
 
@@ -108,22 +145,71 @@ export default function MultiplayerRoom({ roomCode, challenge, timerEnd, onFinis
       pointsEarned: 0,
       solvedAt: null,
     });
-    saveScore(user.uid, challenge, hintsUsed, false).catch(console.error);
+    saveScore(user.uid, activeChallenge, hintsUsed, false).catch(console.error);
     setPhase("surrendered");
+  }
+
+  async function handleStartNextRound() {
+    setRoundLoading(true);
+    setRoundError(null);
+
+    try {
+      const { category, difficulty } = pickRandomChallengeConfig();
+      const nextChallenge = await generateChallenge(category, difficulty);
+      const roomSnap = await get(ref(rtdb, `rooms/${roomCode}`));
+      if (!roomSnap.exists()) throw new Error("room-not-found");
+      const latestPlayers = roomSnap.val()?.players ?? players;
+
+      await update(
+        ref(rtdb, `rooms/${roomCode}`),
+        buildRoundUpdate(nextChallenge, latestPlayers)
+      );
+    } catch {
+      setRoundError("Error generando el nuevo reto. Intenta de nuevo.");
+    } finally {
+      setRoundLoading(false);
+    }
+  }
+
+  async function handleCloseGroup() {
+    try {
+      await remove(ref(rtdb, `rooms/${roomCode}`));
+    } catch {
+      // Firebase listener also handles closed rooms.
+    }
+    onExitGroup?.();
+  }
+
+  async function handleExitGroup() {
+    try {
+      await remove(ref(rtdb, `rooms/${roomCode}/players/${user.uid}`));
+    } catch {
+      // Ignore exit errors and return the player to the main menu.
+    }
+    onExitGroup?.();
   }
 
   const sorted = sortPlayers(players);
 
-  // ── FINISHED SCREEN ──────────────────────────────────────────
+  if (!activeChallenge) {
+    return (
+      <div className="max-w-2xl mx-auto border border-gray-800 p-6 text-center">
+        <p className="text-[#00ff41] text-sm tracking-widest animate-pulse">
+          SINCRONIZANDO SALA...
+        </p>
+      </div>
+    );
+  }
+
   if (gameStatus === "finished") {
     return (
       <div className="max-w-2xl mx-auto space-y-6">
-        <div className="text-center">
-          <p className="text-[#00ff41] text-sm tracking-widest font-bold">PARTIDA FINALIZADA</p>
-          <p className="text-xs text-gray-500 mt-1">{challenge.title}</p>
+        <div className="text-center space-y-1">
+          <p className="text-[#00ff41] text-sm tracking-widest font-bold">LOBBY DE GRUPO</p>
+          <p className="text-xs text-gray-500">Partida finalizada: {activeChallenge.title}</p>
+          <p className="text-[10px] text-gray-600 tracking-widest">SALA {roomCode}</p>
         </div>
 
-        {/* Final ranking */}
         <div className="border border-[#00ff4133]">
           <div className="grid grid-cols-[2rem_1fr_7rem_5rem] gap-2 px-4 py-2 border-b border-gray-800 text-xs text-gray-500 tracking-widest">
             <span>#</span>
@@ -131,9 +217,9 @@ export default function MultiplayerRoom({ roomCode, challenge, timerEnd, onFinis
             <span className="text-right">ESTADO</span>
             <span className="text-right">PUNTOS</span>
           </div>
-          {sorted.map(([uid, p], i) => {
+          {sorted.map(([uid, player], i) => {
             const isMe = uid === user.uid;
-            const { label, color } = PLAYER_STATUS[getPlayerStatus(p)];
+            const { label, color } = PLAYER_STATUS[getPlayerStatus(player)];
             return (
               <div
                 key={uid}
@@ -143,47 +229,74 @@ export default function MultiplayerRoom({ roomCode, challenge, timerEnd, onFinis
               >
                 <span className="text-xs text-gray-500">{i + 1}</span>
                 <span className={`text-xs truncate ${isMe ? "text-[#00ff41] font-bold" : "text-gray-300"}`}>
-                  {p.displayName}{isMe && " (tú)"}
+                  {player.displayName}{isMe && " (tu)"}
                 </span>
                 <span className={`text-xs text-right ${color}`}>{label}</span>
-                <span className={`text-xs font-bold text-right ${p.solved ? "text-[#00ff41]" : "text-gray-600"}`}>
-                  {p.pointsEarned > 0 ? `+${p.pointsEarned}` : "0"}
+                <span className={`text-xs font-bold text-right ${player.solved ? "text-[#00ff41]" : "text-gray-600"}`}>
+                  {player.pointsEarned > 0 ? `+${player.pointsEarned}` : "0"}
                 </span>
               </div>
             );
           })}
         </div>
 
-        {/* Solution */}
         <div className="border border-gray-800 p-4 space-y-2">
-          <p className="text-xs text-gray-500 tracking-widest">SOLUCIÓN</p>
-          <p className="text-xs text-gray-300 leading-relaxed">{challenge.solution}</p>
+          <p className="text-xs text-gray-500 tracking-widest">SOLUCION</p>
+          <p className="text-xs text-gray-300 leading-relaxed">{activeChallenge.solution}</p>
           <p className="text-sm text-[#00ff41] font-bold mt-2 border-t border-gray-800 pt-2">
-            {challenge.flag}
+            {activeChallenge.flag}
           </p>
         </div>
 
-        <button
-          onClick={onFinished}
-          className="w-full py-3 bg-[#00ff41] text-black font-bold tracking-widest hover:bg-[#00cc33] transition-colors"
-        >
-          VOLVER AL LOBBY
-        </button>
+        <div className="border border-gray-800 p-4 space-y-3 text-center">
+          {isHost ? (
+            <>
+              <p className="text-xs text-gray-500">
+                El grupo sigue activo. Puedes generar otro reto o cerrar la sala para todos.
+              </p>
+              {roundError && <p className="text-red-400 text-xs">{roundError}</p>}
+              <button
+                onClick={handleStartNextRound}
+                disabled={roundLoading}
+                className="w-full py-3 bg-[#00ff41] text-black font-bold tracking-widest hover:bg-[#00cc33] transition-colors disabled:opacity-50"
+              >
+                {roundLoading ? "GENERANDO RETO..." : "GENERAR NUEVO RETO"}
+              </button>
+              <button
+                onClick={handleCloseGroup}
+                disabled={roundLoading}
+                className="w-full text-xs text-gray-600 hover:text-red-500 transition-colors py-2 disabled:opacity-50"
+              >
+                CERRAR GRUPO
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-gray-500 animate-pulse tracking-widest">
+                ESPERANDO NUEVO RETO DEL HOST...
+              </p>
+              <button
+                onClick={handleExitGroup}
+                className="w-full text-xs text-gray-600 hover:text-red-500 transition-colors py-2"
+              >
+                SALIR DEL GRUPO
+              </button>
+            </>
+          )}
+        </div>
       </div>
     );
   }
 
-  // ── PLAYING SCREEN ───────────────────────────────────────────
   return (
     <div className="space-y-4">
-      {/* Header bar */}
       <div className="flex justify-between items-center border border-gray-800 px-4 py-2">
         <div>
           <p className="text-xs text-gray-500">
-            [{challenge.category.toUpperCase()}] [{challenge.difficulty.toUpperCase()}]
-            {" · "}{challenge.points} pts base
+            [{activeChallenge.category.toUpperCase()}] [{activeChallenge.difficulty.toUpperCase()}]
+            {" - "}{activeChallenge.points} pts base
           </p>
-          <p className="text-sm text-[#00ff41] font-bold">{challenge.title}</p>
+          <p className="text-sm text-[#00ff41] font-bold">{activeChallenge.title}</p>
         </div>
         <div className="text-right">
           <p className={`text-xl font-bold ${timeLeft < 60 ? "text-red-500 animate-pulse" : "text-[#00ff41]"}`}>
@@ -194,21 +307,17 @@ export default function MultiplayerRoom({ roomCode, challenge, timerEnd, onFinis
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Challenge + interaction */}
         <div className="lg:col-span-2 border border-gray-800 p-4 space-y-4">
-          <ChallengeDescription description={challenge.description} />
+          <ChallengeDescription description={activeChallenge.description} />
 
           {phase === "playing" && (
             <>
               <HintSystem
-                hints={challenge.hints}
+                hints={activeChallenge.hints}
                 penalty={hintPenalty}
                 onHintUsed={() => setHintsUsed((n) => n + 1)}
               />
-              <FlagValidator
-                correctFlag={challenge.flag}
-                onSuccess={handleSolve}
-              />
+              <FlagValidator correctFlag={activeChallenge.flag} onSuccess={handleSolve} />
               <button
                 onClick={handleSurrender}
                 className="text-xs text-gray-600 hover:text-red-500 transition-colors underline"
@@ -220,24 +329,23 @@ export default function MultiplayerRoom({ roomCode, challenge, timerEnd, onFinis
 
           {phase === "solved" && (
             <p className="text-[#00ff41] text-sm font-bold tracking-widest text-center py-6">
-              ✓ FLAG CORRECTO — ESPERANDO A LOS DEMÁS
+              FLAG CORRECTO - ESPERANDO A LOS DEMAS
             </p>
           )}
 
           {phase === "surrendered" && (
             <div className="text-center py-6 space-y-1">
-              <p className="text-red-500 text-sm tracking-widest">✗ TE RENDISTE</p>
+              <p className="text-red-500 text-sm tracking-widest">TE RENDISTE</p>
               <p className="text-xs text-gray-600">Esperando que termine la partida...</p>
             </div>
           )}
         </div>
 
-        {/* Live ranking sidebar */}
         <div className="border border-gray-800 p-4 space-y-1">
           <p className="text-xs text-gray-500 tracking-widest mb-3">RANKING EN VIVO</p>
-          {sorted.map(([uid, p], i) => {
+          {sorted.map(([uid, player], i) => {
             const isMe = uid === user.uid;
-            const { label, color } = PLAYER_STATUS[getPlayerStatus(p)];
+            const { label, color } = PLAYER_STATUS[getPlayerStatus(player)];
             return (
               <div
                 key={uid}
@@ -247,10 +355,10 @@ export default function MultiplayerRoom({ roomCode, challenge, timerEnd, onFinis
               >
                 <div className="flex justify-between">
                   <span className={`text-xs ${isMe ? "text-[#00ff41] font-bold" : "text-gray-300"}`}>
-                    {i + 1}. {p.displayName}
+                    {i + 1}. {player.displayName}
                   </span>
-                  <span className={`text-xs font-bold ${p.solved ? "text-[#00ff41]" : "text-gray-600"}`}>
-                    {p.solved ? `+${p.pointsEarned}` : "—"}
+                  <span className={`text-xs font-bold ${player.solved ? "text-[#00ff41]" : "text-gray-600"}`}>
+                    {player.solved ? `+${player.pointsEarned}` : "-"}
                   </span>
                 </div>
                 <p className={`text-[10px] mt-0.5 ${color}`}>{label}</p>

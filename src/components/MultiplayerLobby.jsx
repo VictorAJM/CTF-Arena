@@ -3,22 +3,14 @@ import { ref, set, get, update, onValue, remove, onDisconnect } from "firebase/d
 import { rtdb } from "../utils/firebase";
 import { useAuth } from "../context/AuthContext";
 import { generateChallenge } from "../utils/claudeApi";
-
-const TIMER_DURATION_MS = 5 * 60 * 1000;
+import {
+  buildRoundUpdate,
+  makePlayerEntry,
+  pickRandomChallengeConfig,
+} from "../utils/multiplayer";
 
 function generateCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
-}
-
-function makePlayerEntry(user) {
-  return {
-    displayName: user.displayName || user.email.split("@")[0],
-    solved: false,
-    surrendered: false,
-    pointsEarned: 0,
-    hintsUsed: 0,
-    solvedAt: null,
-  };
 }
 
 export default function MultiplayerLobby({ onGameStart, onBack }) {
@@ -45,6 +37,7 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
           roomCode,
           challenge: data.challenge,
           timerEnd: data.timerEnd,
+          roundId: data.roundId,
           isHost: isHostRef.current,
         });
       }
@@ -90,7 +83,7 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
       const snap = await get(ref(rtdb, `rooms/${code}`));
       if (!snap.exists()) { setError("Sala no encontrada."); return; }
       const data = snap.val();
-      if (data.status !== "waiting") { setError("La partida ya comenzó."); return; }
+      if (data.status === "playing") { setError("La partida ya comenzó."); return; }
 
       const playerRef = ref(rtdb, `rooms/${code}/players/${user.uid}`);
       await set(playerRef, makePlayerEntry(user));
@@ -112,17 +105,13 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
     setLoading(true);
     setError(null);
     try {
-      const categories = ["web", "crypto", "reversing"];
-      const difficulties = ["easy", "medium", "hard"];
-      const category = categories[Math.floor(Math.random() * categories.length)];
-      const difficulty = difficulties[Math.floor(Math.random() * difficulties.length)];
+      const { category, difficulty } = pickRandomChallengeConfig();
       const challenge = await generateChallenge(category, difficulty);
+      const roomSnap = await get(ref(rtdb, `rooms/${roomCode}`));
+      if (!roomSnap.exists()) throw new Error("room-not-found");
+      const players = roomSnap.val()?.players ?? { [user.uid]: makePlayerEntry(user) };
 
-      await update(ref(rtdb, `rooms/${roomCode}`), {
-        status: "playing",
-        challenge,
-        timerEnd: Date.now() + TIMER_DURATION_MS,
-      });
+      await update(ref(rtdb, `rooms/${roomCode}`), buildRoundUpdate(challenge, players));
       // onGameStart fires via onValue listener
     } catch {
       setError("Error generando el reto. Intenta de nuevo.");
@@ -187,6 +176,7 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
   const players = roomData?.players ?? {};
   const playerList = Object.entries(players);
   const hostUid = roomData?.hostUid;
+  const isBetweenRounds = roomData?.status === "finished";
 
   return (
     <div className="max-w-md mx-auto space-y-6">
@@ -229,11 +219,11 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
             disabled={loading}
             className="w-full py-3 bg-[#00ff41] text-black font-bold tracking-widest hover:bg-[#00cc33] transition-colors disabled:opacity-50"
           >
-            {loading ? "GENERANDO RETO..." : "INICIAR PARTIDA"}
+            {loading ? "GENERANDO RETO..." : isBetweenRounds ? "GENERAR NUEVO RETO" : "GENERAR RETO"}
           </button>
         ) : (
           <p className="text-xs text-gray-500 text-center animate-pulse tracking-widest py-3">
-            ESPERANDO AL HOST...
+            {isBetweenRounds ? "ESPERANDO NUEVO RETO DEL HOST..." : "ESPERANDO AL HOST..."}
           </p>
         )}
         <button
@@ -241,7 +231,7 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
           disabled={loading}
           className="w-full text-xs text-gray-600 hover:text-red-500 transition-colors py-2"
         >
-          ABANDONAR SALA
+          {isHost ? "CERRAR GRUPO" : "SALIR DEL GRUPO"}
         </button>
       </div>
     </div>
