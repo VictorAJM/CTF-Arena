@@ -5,10 +5,16 @@ import { useAuth } from "../context/AuthContext";
 import { useUserScores } from "../hooks/useUserScores";
 import { SCORING } from "../constants/config";
 import { generateChallenge } from "../utils/claudeApi";
-import { buildRoundUpdate, pickRandomChallengeConfig } from "../utils/multiplayer";
+import {
+  buildRoundUpdate,
+  normalizeMultiplayerSettings,
+  pickRandomChallengeConfig,
+  validateMultiplayerSettings,
+} from "../utils/multiplayer";
 import HintSystem from "./HintSystem";
 import FlagValidator from "./FlagValidator";
 import ChallengeDescription from "./ChallengeDescription";
+import MultiplayerSettings from "./MultiplayerSettings";
 import ConfirmDialog from "./ConfirmDialog";
 
 function formatTime(seconds) {
@@ -65,6 +71,7 @@ export default function MultiplayerRoom({
   challenge: initialChallenge,
   timerEnd: initialTimerEnd,
   roundId: initialRoundId,
+  settings: initialSettings,
   isHost = false,
   onExitGroup,
 }) {
@@ -77,6 +84,9 @@ export default function MultiplayerRoom({
   const [gameStatus, setGameStatus] = useState("playing");
   const [timeLeft, setTimeLeft] = useState(
     Math.max(0, Math.ceil((initialTimerEnd - Date.now()) / 1000))
+  );
+  const [roomSettings, setRoomSettings] = useState(
+    normalizeMultiplayerSettings(initialSettings)
   );
   const [phase, setPhase] = useState("playing");
   const [hintsUsed, setHintsUsed] = useState(0);
@@ -99,6 +109,7 @@ export default function MultiplayerRoom({
 
       const nextPlayers = data.players ?? {};
       setPlayers(nextPlayers);
+      setRoomSettings(normalizeMultiplayerSettings(data.settings));
 
       if (data.status === "playing" && data.challenge && data.timerEnd) {
         const nextRoundId = data.roundId ?? data.timerEnd;
@@ -195,11 +206,22 @@ export default function MultiplayerRoom({
     setRoundError(null);
 
     try {
-      const { category, difficulty } = pickRandomChallengeConfig();
-      const nextChallenge = await generateChallenge(category, difficulty);
       const roomSnap = await get(ref(rtdb, `rooms/${roomCode}`));
       if (!roomSnap.exists()) throw new Error("room-not-found");
-      const latestPlayers = roomSnap.val()?.players ?? players;
+      const room = roomSnap.val();
+      const settings = normalizeMultiplayerSettings(room?.settings ?? roomSettings);
+      const validation = validateMultiplayerSettings(settings);
+
+      if (!validation.isValid) {
+        setRoundError(validation.message);
+        return;
+      }
+
+      const { category, difficulty } = pickRandomChallengeConfig(settings);
+      const nextChallenge = await generateChallenge(category, difficulty);
+      const latestRoomSnap = await get(ref(rtdb, `rooms/${roomCode}`));
+      if (!latestRoomSnap.exists()) throw new Error("room-not-found");
+      const latestPlayers = latestRoomSnap.val()?.players ?? players;
 
       await update(
         ref(rtdb, `rooms/${roomCode}`),
@@ -209,6 +231,20 @@ export default function MultiplayerRoom({
       setRoundError("Error generando el nuevo reto. Intenta de nuevo.");
     } finally {
       setRoundLoading(false);
+    }
+  }
+
+  async function handleSettingsChange(settings) {
+    if (!isHost) return;
+
+    const normalized = normalizeMultiplayerSettings(settings);
+    setRoomSettings(normalized);
+    setRoundError(null);
+
+    try {
+      await update(ref(rtdb, `rooms/${roomCode}`), { settings: normalized });
+    } catch {
+      setRoundError("Error actualizando la configuracion.");
     }
   }
 
@@ -290,6 +326,13 @@ export default function MultiplayerRoom({
             {activeChallenge.flag}
           </p>
         </div>
+
+        <MultiplayerSettings
+          settings={roomSettings}
+          isHost={isHost}
+          disabled={roundLoading}
+          onChange={handleSettingsChange}
+        />
 
         <div className="border border-gray-800 p-4 space-y-3 text-center">
           {isHost ? (

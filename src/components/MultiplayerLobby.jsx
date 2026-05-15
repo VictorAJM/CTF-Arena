@@ -5,9 +5,13 @@ import { useAuth } from "../context/AuthContext";
 import { generateChallenge } from "../utils/claudeApi";
 import {
   buildRoundUpdate,
+  createDefaultMultiplayerSettings,
   makePlayerEntry,
+  normalizeMultiplayerSettings,
   pickRandomChallengeConfig,
+  validateMultiplayerSettings,
 } from "../utils/multiplayer";
+import MultiplayerSettings from "./MultiplayerSettings";
 import ConfirmDialog from "./ConfirmDialog";
 
 function generateCode() {
@@ -40,6 +44,7 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
           challenge: data.challenge,
           timerEnd: data.timerEnd,
           roundId: data.roundId,
+          settings: data.settings,
           isHost: isHostRef.current,
         });
       }
@@ -59,6 +64,7 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
         createdAt: Date.now(),
         challenge: null,
         timerEnd: null,
+        settings: createDefaultMultiplayerSettings(),
         players: { [user.uid]: makePlayerEntry(user) },
       });
       // Remove whole room when host disconnects
@@ -107,17 +113,43 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
     setLoading(true);
     setError(null);
     try {
-      const { category, difficulty } = pickRandomChallengeConfig();
-      const challenge = await generateChallenge(category, difficulty);
       const roomSnap = await get(ref(rtdb, `rooms/${roomCode}`));
       if (!roomSnap.exists()) throw new Error("room-not-found");
-      const players = roomSnap.val()?.players ?? { [user.uid]: makePlayerEntry(user) };
+      const room = roomSnap.val();
+      const settings = normalizeMultiplayerSettings(room?.settings);
+      const validation = validateMultiplayerSettings(settings);
+
+      if (!validation.isValid) {
+        setError(validation.message);
+        return;
+      }
+
+      const { category, difficulty } = pickRandomChallengeConfig(settings);
+      const challenge = await generateChallenge(category, difficulty);
+      const latestRoomSnap = await get(ref(rtdb, `rooms/${roomCode}`));
+      if (!latestRoomSnap.exists()) throw new Error("room-not-found");
+      const players = latestRoomSnap.val()?.players ?? { [user.uid]: makePlayerEntry(user) };
 
       await update(ref(rtdb, `rooms/${roomCode}`), buildRoundUpdate(challenge, players));
       // onGameStart fires via onValue listener
     } catch {
       setError("Error generando el reto. Intenta de nuevo.");
+    } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleSettingsChange(settings) {
+    if (!isHost || !roomCode) return;
+
+    const normalized = normalizeMultiplayerSettings(settings);
+    setRoomData((current) => (current ? { ...current, settings: normalized } : current));
+    setError(null);
+
+    try {
+      await update(ref(rtdb, `rooms/${roomCode}`), { settings: normalized });
+    } catch {
+      setError("Error actualizando la configuracion.");
     }
   }
 
@@ -211,6 +243,13 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
           </p>
         )}
       </div>
+
+      <MultiplayerSettings
+        settings={roomData?.settings}
+        isHost={isHost}
+        disabled={loading}
+        onChange={handleSettingsChange}
+      />
 
       {error && <p className="text-red-400 text-xs text-center">{error}</p>}
 
