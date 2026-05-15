@@ -42,6 +42,14 @@ export default function MultiplayerSettings({
     onChange?.(next);
   }
 
+  function updateHostInstructions(value) {
+    if (!canEdit) return;
+
+    const next = normalizeMultiplayerSettings(normalized);
+    next.hostInstructions = value.slice(0, 400);
+    onChange?.(next);
+  }
+
   return (
     <div className="border border-gray-800 p-4 space-y-4">
       <div className="flex items-start justify-between gap-3">
@@ -118,6 +126,32 @@ export default function MultiplayerSettings({
             </div>
           );
         })}
+      </div>
+
+      <div className="border-t border-gray-900 pt-4 space-y-2">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs text-gray-500 tracking-widest">GUIA TEMATICA DEL HOST</p>
+            <p className="text-[10px] text-gray-600 mt-1">
+              {isHost
+                ? "Opcional: orienta a la IA sobre el tema, contexto o estilo de las siguientes rondas."
+                : "El host puede indicar a la IA por qué tema o enfoque deben ir las siguientes rondas."}
+            </p>
+          </div>
+          <span className="text-[10px] text-gray-600">
+            {normalized.hostInstructions.length}/400
+          </span>
+        </div>
+
+        <textarea
+          value={normalized.hostInstructions}
+          onChange={(e) => updateHostInstructions(e.target.value)}
+          disabled={!canEdit}
+          maxLength={400}
+          rows={4}
+          placeholder="Ej: Retos inspirados en banca digital, paneles admin, tokens JWT y APIs internas. Evita temas demasiado genéricos."
+          className="w-full resize-none bg-[#0d0d0d] border border-gray-700 px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-[#00ff41] disabled:opacity-50 disabled:cursor-not-allowed"
+        />
       </div>
 
       {!validation.isValid && (

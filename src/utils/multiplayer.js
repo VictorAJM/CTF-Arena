@@ -24,6 +24,7 @@ const DEFAULT_DIFFICULTIES = Object.fromEntries(
 );
 
 export const DEFAULT_MULTIPLAYER_SETTINGS = {
+  hostInstructions: "",
   challengePool: Object.fromEntries(
     MULTIPLAYER_CHALLENGE_CATEGORIES.map((category) => [
       category.id,
@@ -41,8 +42,13 @@ function clone(value) {
 
 export function normalizeMultiplayerSettings(settings = DEFAULT_MULTIPLAYER_SETTINGS) {
   const sourcePool = settings?.challengePool ?? {};
+  const hostInstructions =
+    typeof settings?.hostInstructions === "string"
+      ? settings.hostInstructions.slice(0, 400)
+      : DEFAULT_MULTIPLAYER_SETTINGS.hostInstructions;
 
   return {
+    hostInstructions,
     challengePool: Object.fromEntries(
       MULTIPLAYER_CHALLENGE_CATEGORIES.map((category) => {
         const defaultCategory = DEFAULT_MULTIPLAYER_SETTINGS.challengePool[category.id];

@@ -6,8 +6,8 @@ import { WEB_TOOLS_DEF, executeWebTool } from "./webTools";
 const MAX_RETRIES = 2;
 const MAX_TOOL_LOOPS = 5;
 
-async function fetchFromClaude(category, difficulty) {
-  const { systemPrompt, userPrompt } = buildPrompt(category, difficulty);
+async function fetchFromClaude(category, difficulty, options = {}) {
+  const { systemPrompt, userPrompt } = buildPrompt(category, difficulty, options);
 
   const system = [
     {
@@ -90,12 +90,12 @@ async function fetchFromClaude(category, difficulty) {
   throw new Error("Exceeded maximum tool execution loops");
 }
 
-export async function generateChallenge(category, difficulty) {
+export async function generateChallenge(category, difficulty, options = {}) {
   let lastError;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      return await fetchFromClaude(category, difficulty);
+      return await fetchFromClaude(category, difficulty, options);
     } catch (err) {
       lastError = err;
       console.warn(`Intento ${attempt + 1} fallido:`, err.message);

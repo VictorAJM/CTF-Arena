@@ -218,14 +218,23 @@ export default function MultiplayerRoom({
       }
 
       const { category, difficulty } = pickRandomChallengeConfig(settings);
-      const nextChallenge = await generateChallenge(category, difficulty);
+      const nextChallenge = await generateChallenge(category, difficulty, {
+        hostInstructions: settings.hostInstructions,
+      });
       const latestRoomSnap = await get(ref(rtdb, `rooms/${roomCode}`));
       if (!latestRoomSnap.exists()) throw new Error("room-not-found");
       const latestPlayers = latestRoomSnap.val()?.players ?? players;
+      const nextSettings = {
+        ...settings,
+        hostInstructions: "",
+      };
 
       await update(
         ref(rtdb, `rooms/${roomCode}`),
-        buildRoundUpdate(nextChallenge, latestPlayers)
+        {
+          ...buildRoundUpdate(nextChallenge, latestPlayers),
+          settings: nextSettings,
+        }
       );
     } catch {
       setRoundError("Error generando el nuevo reto. Intenta de nuevo.");
