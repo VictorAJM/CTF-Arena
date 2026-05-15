@@ -9,6 +9,7 @@ import { buildRoundUpdate, pickRandomChallengeConfig } from "../utils/multiplaye
 import HintSystem from "./HintSystem";
 import FlagValidator from "./FlagValidator";
 import ChallengeDescription from "./ChallengeDescription";
+import ConfirmDialog from "./ConfirmDialog";
 
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60).toString().padStart(2, "0");
@@ -61,6 +62,7 @@ export default function MultiplayerRoom({
   const [hintsUsed, setHintsUsed] = useState(0);
   const [roundLoading, setRoundLoading] = useState(false);
   const [roundError, setRoundError] = useState(null);
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
 
   const activeRoundRef = useRef(initialRoundId ?? initialTimerEnd);
   const { base, hintPenalty, minPoints } =
@@ -263,7 +265,7 @@ export default function MultiplayerRoom({
                 {roundLoading ? "GENERANDO RETO..." : "GENERAR NUEVO RETO"}
               </button>
               <button
-                onClick={handleCloseGroup}
+                onClick={() => setConfirmLeaveOpen(true)}
                 disabled={roundLoading}
                 className="w-full text-xs text-gray-600 hover:text-red-500 transition-colors py-2 disabled:opacity-50"
               >
@@ -276,7 +278,7 @@ export default function MultiplayerRoom({
                 ESPERANDO NUEVO RETO DEL HOST...
               </p>
               <button
-                onClick={handleExitGroup}
+                onClick={() => setConfirmLeaveOpen(true)}
                 className="w-full text-xs text-gray-600 hover:text-red-500 transition-colors py-2"
               >
                 SALIR DEL GRUPO
@@ -284,6 +286,19 @@ export default function MultiplayerRoom({
             </>
           )}
         </div>
+
+        <ConfirmDialog
+          open={confirmLeaveOpen}
+          title={isHost ? "¿Cerrar grupo?" : "¿Salir del grupo?"}
+          message={
+            isHost
+              ? "Cerrar el grupo finalizará la sesión para el resto de los jugadores."
+              : "¿Estás seguro que quieres salir del grupo?"
+          }
+          confirmDisabled={roundLoading}
+          onConfirm={isHost ? handleCloseGroup : handleExitGroup}
+          onCancel={() => setConfirmLeaveOpen(false)}
+        />
       </div>
     );
   }

@@ -8,6 +8,7 @@ import {
   makePlayerEntry,
   pickRandomChallengeConfig,
 } from "../utils/multiplayer";
+import ConfirmDialog from "./ConfirmDialog";
 
 function generateCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -22,6 +23,7 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
   const [isHost, setIsHost] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
   // Ref to read isHost inside onValue closure without stale state
   const isHostRef = useRef(false);
 
@@ -227,13 +229,26 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
           </p>
         )}
         <button
-          onClick={handleLeave}
+          onClick={() => setConfirmLeaveOpen(true)}
           disabled={loading}
           className="w-full text-xs text-gray-600 hover:text-red-500 transition-colors py-2"
         >
           {isHost ? "CERRAR GRUPO" : "SALIR DEL GRUPO"}
         </button>
       </div>
+
+      <ConfirmDialog
+        open={confirmLeaveOpen}
+        title={isHost ? "¿Cerrar grupo?" : "¿Salir del grupo?"}
+        message={
+          isHost
+            ? "Cerrar el grupo finalizará la sesión para el resto de los jugadores."
+            : "¿Estás seguro que quieres salir del grupo?"
+        }
+        confirmDisabled={loading}
+        onConfirm={handleLeave}
+        onCancel={() => setConfirmLeaveOpen(false)}
+      />
     </div>
   );
 }
