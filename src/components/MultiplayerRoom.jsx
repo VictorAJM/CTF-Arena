@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ref, update, onValue, remove, get } from "firebase/database";
+import { ref, update, onValue, remove, get, runTransaction } from "firebase/database";
 import { rtdb } from "../utils/firebase";
 import { useAuth } from "../context/AuthContext";
 import { useUserScores } from "../hooks/useUserScores";
@@ -29,11 +29,31 @@ function getPlayerStatus(player) {
   return "solving";
 }
 
+function getTotalPoints(player) {
+  const points = Number(player.totalPoints ?? 0);
+  return Number.isFinite(points) ? points : 0;
+}
+
+function getRoundDelta(player) {
+  const points = Number(player.pointsEarned ?? 0);
+  return Number.isFinite(points) ? points : 0;
+}
+
+function formatDelta(points) {
+  return points > 0 ? `+${points}` : "0";
+}
+
 function sortPlayers(players) {
   return Object.entries(players).sort(([, a], [, b]) => {
+    const totalDiff = getTotalPoints(b) - getTotalPoints(a);
+    if (totalDiff !== 0) return totalDiff;
+
+    const deltaDiff = getRoundDelta(b) - getRoundDelta(a);
+    if (deltaDiff !== 0) return deltaDiff;
+
+    if (a.solved && b.solved) return (a.solvedAt ?? 0) - (b.solvedAt ?? 0);
     if (a.solved && !b.solved) return -1;
     if (!a.solved && b.solved) return 1;
-    if (a.solved && b.solved) return a.solvedAt - b.solvedAt;
     if (a.surrendered && !b.surrendered) return 1;
     if (!a.surrendered && b.surrendered) return -1;
     return 0;
@@ -130,25 +150,44 @@ export default function MultiplayerRoom({
 
   async function handleSolve() {
     const pointsEarned = Math.max(base - hintsUsed * hintPenalty, minPoints);
-    await update(ref(rtdb, `rooms/${roomCode}/players/${user.uid}`), {
-      solved: true,
-      hintsUsed,
-      pointsEarned,
-      solvedAt: Date.now(),
+    const solvedAt = Date.now();
+    const result = await runTransaction(ref(rtdb, `rooms/${roomCode}/players/${user.uid}`), (player) => {
+      if (!player || player.solved || player.surrendered) return;
+
+      return {
+        ...player,
+        solved: true,
+        hintsUsed,
+        pointsEarned,
+        totalPoints: getTotalPoints(player) + pointsEarned,
+        solvedAt,
+      };
     });
-    saveScore(user.uid, activeChallenge, hintsUsed, true).catch(console.error);
-    setPhase("solved");
+
+    if (result.committed) {
+      saveScore(user.uid, activeChallenge, hintsUsed, true).catch(console.error);
+      setPhase("solved");
+    }
   }
 
   async function handleSurrender() {
-    await update(ref(rtdb, `rooms/${roomCode}/players/${user.uid}`), {
-      surrendered: true,
-      hintsUsed,
-      pointsEarned: 0,
-      solvedAt: null,
+    const result = await runTransaction(ref(rtdb, `rooms/${roomCode}/players/${user.uid}`), (player) => {
+      if (!player || player.solved || player.surrendered) return;
+
+      return {
+        ...player,
+        surrendered: true,
+        hintsUsed,
+        pointsEarned: 0,
+        totalPoints: getTotalPoints(player),
+        solvedAt: null,
+      };
     });
-    saveScore(user.uid, activeChallenge, hintsUsed, false).catch(console.error);
-    setPhase("surrendered");
+
+    if (result.committed) {
+      saveScore(user.uid, activeChallenge, hintsUsed, false).catch(console.error);
+      setPhase("surrendered");
+    }
   }
 
   async function handleStartNextRound() {
@@ -213,19 +252,19 @@ export default function MultiplayerRoom({
         </div>
 
         <div className="border border-[#00ff4133]">
-          <div className="grid grid-cols-[2rem_1fr_7rem_5rem] gap-2 px-4 py-2 border-b border-gray-800 text-xs text-gray-500 tracking-widest">
+          <div className="grid grid-cols-[2rem_1fr_5rem_5rem] gap-2 px-4 py-2 border-b border-gray-800 text-xs text-gray-500 tracking-widest">
             <span>#</span>
             <span>JUGADOR</span>
-            <span className="text-right">ESTADO</span>
-            <span className="text-right">PUNTOS</span>
+            <span className="text-right">DELTA</span>
+            <span className="text-right">TOTAL</span>
           </div>
           {sorted.map(([uid, player], i) => {
             const isMe = uid === user.uid;
-            const { label, color } = PLAYER_STATUS[getPlayerStatus(player)];
+            const roundDelta = getRoundDelta(player);
             return (
               <div
                 key={uid}
-                className={`grid grid-cols-[2rem_1fr_7rem_5rem] gap-2 px-4 py-3 border-b border-gray-900 last:border-0 ${
+                className={`grid grid-cols-[2rem_1fr_5rem_5rem] gap-2 px-4 py-3 border-b border-gray-900 last:border-0 ${
                   isMe ? "bg-[#00ff4108] border-l-2 border-l-[#00ff41]" : ""
                 }`}
               >
@@ -233,9 +272,11 @@ export default function MultiplayerRoom({
                 <span className={`text-xs truncate ${isMe ? "text-[#00ff41] font-bold" : "text-gray-300"}`}>
                   {player.displayName}{isMe && " (tu)"}
                 </span>
-                <span className={`text-xs text-right ${color}`}>{label}</span>
-                <span className={`text-xs font-bold text-right ${player.solved ? "text-[#00ff41]" : "text-gray-600"}`}>
-                  {player.pointsEarned > 0 ? `+${player.pointsEarned}` : "0"}
+                <span className={`text-xs font-bold text-right ${roundDelta > 0 ? "text-[#00ff41]" : "text-gray-600"}`}>
+                  {formatDelta(roundDelta)}
+                </span>
+                <span className="text-xs font-bold text-right text-gray-200">
+                  {getTotalPoints(player)}
                 </span>
               </div>
             );
@@ -372,11 +413,13 @@ export default function MultiplayerRoom({
                   <span className={`text-xs ${isMe ? "text-[#00ff41] font-bold" : "text-gray-300"}`}>
                     {i + 1}. {player.displayName}
                   </span>
-                  <span className={`text-xs font-bold ${player.solved ? "text-[#00ff41]" : "text-gray-600"}`}>
-                    {player.solved ? `+${player.pointsEarned}` : "-"}
+                  <span className="text-xs font-bold text-gray-200">
+                    {getTotalPoints(player)}
                   </span>
                 </div>
-                <p className={`text-[10px] mt-0.5 ${color}`}>{label}</p>
+                <p className={`text-[10px] mt-0.5 ${color}`}>
+                  {label} - Delta {formatDelta(getRoundDelta(player))}
+                </p>
               </div>
             );
           })}

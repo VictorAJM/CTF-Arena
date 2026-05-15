@@ -6,6 +6,7 @@ export function makePlayerEntry(user) {
     solved: false,
     surrendered: false,
     pointsEarned: 0,
+    totalPoints: 0,
     hintsUsed: 0,
     solvedAt: null,
   };
@@ -20,6 +21,7 @@ export function resetPlayerProgress(players = {}) {
         solved: false,
         surrendered: false,
         pointsEarned: 0,
+        totalPoints: Number(player.totalPoints ?? 0),
         hintsUsed: 0,
         solvedAt: null,
       },
