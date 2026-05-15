@@ -8,6 +8,7 @@ import HintSystem from "./HintSystem";
 import FlagValidator from "./FlagValidator";
 import SolutionViewer from "./SolutionViewer";
 import Scoreboard from "./Scoreboard";
+import ChallengeDescription from "./ChallengeDescription";
 
 export default function ChallengeCard({ category, difficulty, onReset }) {
   const { challenge, loading, error, fetchChallenge } = useChallenge();
@@ -89,9 +90,7 @@ export default function ChallengeCard({ category, difficulty, onReset }) {
           <span className="text-xs text-gray-500">{challenge.points} pts base</span>
         </div>
 
-        <p className="text-sm text-gray-300 leading-relaxed border-l-2 border-gray-700 pl-3">
-          {challenge.description}
-        </p>
+        <ChallengeDescription description={challenge.description} />
 
         {phase === "playing" && (
           <div key={resetKey}>

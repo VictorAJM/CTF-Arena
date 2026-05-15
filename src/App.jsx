@@ -93,7 +93,10 @@ export default function App() {
         multiGame ? (
           <MultiplayerRoom
             {...multiGame}
-            onFinished={() => setMultiGame(null)}
+            onExitGroup={() => {
+              setMultiGame(null);
+              setScreen("home");
+            }}
           />
         ) : (
           <MultiplayerLobby

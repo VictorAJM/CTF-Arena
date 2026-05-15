@@ -3,22 +3,19 @@ import { ref, set, get, update, onValue, remove, onDisconnect } from "firebase/d
 import { rtdb } from "../utils/firebase";
 import { useAuth } from "../context/AuthContext";
 import { generateChallenge } from "../utils/claudeApi";
-
-const TIMER_DURATION_MS = 5 * 60 * 1000;
+import {
+  buildRoundUpdate,
+  createDefaultMultiplayerSettings,
+  makePlayerEntry,
+  normalizeMultiplayerSettings,
+  pickRandomChallengeConfig,
+  validateMultiplayerSettings,
+} from "../utils/multiplayer";
+import MultiplayerSettings from "./MultiplayerSettings";
+import ConfirmDialog from "./ConfirmDialog";
 
 function generateCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
-}
-
-function makePlayerEntry(user) {
-  return {
-    displayName: user.displayName || user.email.split("@")[0],
-    solved: false,
-    surrendered: false,
-    pointsEarned: 0,
-    hintsUsed: 0,
-    solvedAt: null,
-  };
 }
 
 export default function MultiplayerLobby({ onGameStart, onBack }) {
@@ -30,6 +27,7 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
   const [isHost, setIsHost] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
   // Ref to read isHost inside onValue closure without stale state
   const isHostRef = useRef(false);
 
@@ -45,6 +43,8 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
           roomCode,
           challenge: data.challenge,
           timerEnd: data.timerEnd,
+          roundId: data.roundId,
+          settings: data.settings,
           isHost: isHostRef.current,
         });
       }
@@ -64,6 +64,7 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
         createdAt: Date.now(),
         challenge: null,
         timerEnd: null,
+        settings: createDefaultMultiplayerSettings(),
         players: { [user.uid]: makePlayerEntry(user) },
       });
       // Remove whole room when host disconnects
@@ -90,7 +91,7 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
       const snap = await get(ref(rtdb, `rooms/${code}`));
       if (!snap.exists()) { setError("Sala no encontrada."); return; }
       const data = snap.val();
-      if (data.status !== "waiting") { setError("La partida ya comenzó."); return; }
+      if (data.status === "playing") { setError("La partida ya comenzó."); return; }
 
       const playerRef = ref(rtdb, `rooms/${code}/players/${user.uid}`);
       await set(playerRef, makePlayerEntry(user));
@@ -112,21 +113,43 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
     setLoading(true);
     setError(null);
     try {
-      const categories = ["web", "crypto", "reversing"];
-      const difficulties = ["easy", "medium", "hard"];
-      const category = categories[Math.floor(Math.random() * categories.length)];
-      const difficulty = difficulties[Math.floor(Math.random() * difficulties.length)];
-      const challenge = await generateChallenge(category, difficulty);
+      const roomSnap = await get(ref(rtdb, `rooms/${roomCode}`));
+      if (!roomSnap.exists()) throw new Error("room-not-found");
+      const room = roomSnap.val();
+      const settings = normalizeMultiplayerSettings(room?.settings);
+      const validation = validateMultiplayerSettings(settings);
 
-      await update(ref(rtdb, `rooms/${roomCode}`), {
-        status: "playing",
-        challenge,
-        timerEnd: Date.now() + TIMER_DURATION_MS,
-      });
+      if (!validation.isValid) {
+        setError(validation.message);
+        return;
+      }
+
+      const { category, difficulty } = pickRandomChallengeConfig(settings);
+      const challenge = await generateChallenge(category, difficulty);
+      const latestRoomSnap = await get(ref(rtdb, `rooms/${roomCode}`));
+      if (!latestRoomSnap.exists()) throw new Error("room-not-found");
+      const players = latestRoomSnap.val()?.players ?? { [user.uid]: makePlayerEntry(user) };
+
+      await update(ref(rtdb, `rooms/${roomCode}`), buildRoundUpdate(challenge, players));
       // onGameStart fires via onValue listener
     } catch {
       setError("Error generando el reto. Intenta de nuevo.");
+    } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleSettingsChange(settings) {
+    if (!isHost || !roomCode) return;
+
+    const normalized = normalizeMultiplayerSettings(settings);
+    setRoomData((current) => (current ? { ...current, settings: normalized } : current));
+    setError(null);
+
+    try {
+      await update(ref(rtdb, `rooms/${roomCode}`), { settings: normalized });
+    } catch {
+      setError("Error actualizando la configuracion.");
     }
   }
 
@@ -187,6 +210,7 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
   const players = roomData?.players ?? {};
   const playerList = Object.entries(players);
   const hostUid = roomData?.hostUid;
+  const isBetweenRounds = roomData?.status === "finished";
 
   return (
     <div className="max-w-md mx-auto space-y-6">
@@ -220,6 +244,13 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
         )}
       </div>
 
+      <MultiplayerSettings
+        settings={roomData?.settings}
+        isHost={isHost}
+        disabled={loading}
+        onChange={handleSettingsChange}
+      />
+
       {error && <p className="text-red-400 text-xs text-center">{error}</p>}
 
       <div className="space-y-2">
@@ -229,21 +260,34 @@ export default function MultiplayerLobby({ onGameStart, onBack }) {
             disabled={loading}
             className="w-full py-3 bg-[#00ff41] text-black font-bold tracking-widest hover:bg-[#00cc33] transition-colors disabled:opacity-50"
           >
-            {loading ? "GENERANDO RETO..." : "INICIAR PARTIDA"}
+            {loading ? "GENERANDO RETO..." : isBetweenRounds ? "GENERAR NUEVO RETO" : "GENERAR RETO"}
           </button>
         ) : (
           <p className="text-xs text-gray-500 text-center animate-pulse tracking-widest py-3">
-            ESPERANDO AL HOST...
+            {isBetweenRounds ? "ESPERANDO NUEVO RETO DEL HOST..." : "ESPERANDO AL HOST..."}
           </p>
         )}
         <button
-          onClick={handleLeave}
+          onClick={() => setConfirmLeaveOpen(true)}
           disabled={loading}
           className="w-full text-xs text-gray-600 hover:text-red-500 transition-colors py-2"
         >
-          ABANDONAR SALA
+          {isHost ? "CERRAR GRUPO" : "SALIR DEL GRUPO"}
         </button>
       </div>
+
+      <ConfirmDialog
+        open={confirmLeaveOpen}
+        title={isHost ? "¿Cerrar grupo?" : "¿Salir del grupo?"}
+        message={
+          isHost
+            ? "Cerrar el grupo finalizará la sesión para el resto de los jugadores."
+            : "¿Estás seguro que quieres salir del grupo?"
+        }
+        confirmDisabled={loading}
+        onConfirm={handleLeave}
+        onCancel={() => setConfirmLeaveOpen(false)}
+      />
     </div>
   );
 }
